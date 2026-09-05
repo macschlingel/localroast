@@ -1,142 +1,79 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { errorResponse, zodErrorResponse } from "@/lib/api";
+import { normalizeRecipeInput, recipeSchema } from "@/lib/validation/recipe";
 import { NextResponse } from "next/server";
-import { z } from "zod";
 
-const stepSchema = z.object({
-  step_order: z.number(),
-  name: z.string(),
-  volume_ml: z.number(),
-  time_seconds: z.number(),
-  flow_rate_ml_per_sec: z.number(),
-});
+type RouteContext = { params: Promise<{ id: string }> };
 
-const recipeSchema = z.object({
-  title: z.string().min(1),
-  grinder: z.string(),
-  grind_size: z.string(),
-  is_public: z.boolean().default(false),
-  steps: z.array(stepSchema),
-});
-
-export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_req: Request, { params }: RouteContext) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
-
   const recipe = await prisma.recipe.findUnique({
-    where: {
-      id: params.id,
-    },
-    include: {
-      steps: {
-        orderBy: {
-          step_order: "asc",
-        },
-      },
-    },
+    where: { id },
+    include: { steps: { orderBy: { step_order: "asc" } } },
   });
 
-  if (!recipe) {
-    return new NextResponse("Not Found", { status: 404 });
-  }
+  if (!recipe) return errorResponse("Not Found", 404);
 
-  // Allow if public or if owner
   if (!recipe.is_public && (!session?.user?.id || recipe.userId !== session.user.id)) {
-    return new NextResponse("Unauthorized", { status: 401 });
+    return errorResponse("Unauthorized", 401);
   }
 
   return NextResponse.json(recipe);
 }
 
-export async function PUT(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(req: Request, { params }: RouteContext) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  if (!session?.user?.id) return errorResponse("Unauthorized", 401);
 
   try {
-    const json = await req.json();
-    const body = recipeSchema.parse(json);
+    const body = normalizeRecipeInput(recipeSchema.parse(await req.json()));
+    const existingRecipe = await prisma.recipe.findUnique({ where: { id } });
 
-    // Verify ownership
-    const existingRecipe = await prisma.recipe.findUnique({
-      where: { id: params.id },
-    });
+    if (!existingRecipe) return errorResponse("Not Found", 404);
+    if (existingRecipe.userId !== session.user.id) return errorResponse("Unauthorized", 401);
 
-    if (!existingRecipe) {
-      return new NextResponse("Not Found", { status: 404 });
-    }
-
-    if (existingRecipe.userId !== session.user.id) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
-    // Update recipe and steps
-    // Simplest way is to delete old steps and create new ones
     const recipe = await prisma.$transaction(async (tx) => {
-      await tx.step.deleteMany({
-        where: { recipeId: params.id },
-      });
-
-      return await tx.recipe.update({
-        where: { id: params.id },
+      await tx.step.deleteMany({ where: { recipeId: id } });
+      return tx.recipe.update({
+        where: { id },
         data: {
           title: body.title,
           grinder: body.grinder,
           grind_size: body.grind_size,
+          coffee_filter: body.coffee_filter,
+          filter_paper: body.filter_paper,
           is_public: body.is_public,
-          steps: {
-            create: body.steps,
-          },
+          steps: { create: body.steps },
         },
-        include: {
-          steps: true,
-        },
+        include: { steps: { orderBy: { step_order: "asc" } } },
       });
     });
 
     return NextResponse.json(recipe);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return new NextResponse(JSON.stringify(error.issues), { status: 422 });
-    }
+    const validation = zodErrorResponse(error);
+    if (validation) return validation;
 
-    return new NextResponse(null, { status: 500 });
+    console.error("Failed to update recipe", error);
+    return errorResponse("Internal server error", 500);
   }
 }
 
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(_req: Request, { params }: RouteContext) {
+  const { id } = await params;
   const session = await getServerSession(authOptions);
 
-  if (!session?.user?.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+  if (!session?.user?.id) return errorResponse("Unauthorized", 401);
 
-  const existingRecipe = await prisma.recipe.findUnique({
-    where: { id: params.id },
-  });
+  const existingRecipe = await prisma.recipe.findUnique({ where: { id } });
+  if (!existingRecipe) return errorResponse("Not Found", 404);
+  if (existingRecipe.userId !== session.user.id) return errorResponse("Unauthorized", 401);
 
-  if (!existingRecipe) {
-    return new NextResponse("Not Found", { status: 404 });
-  }
-
-  if (existingRecipe.userId !== session.user.id) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
-
-  await prisma.recipe.delete({
-    where: { id: params.id },
-  });
-
+  await prisma.recipe.delete({ where: { id } });
   return new NextResponse(null, { status: 204 });
 }

@@ -21,6 +21,9 @@ export function Navbar() {
               <Link href="/dashboard" className="text-sm font-medium hover:underline">
                 Dashboard
               </Link>
+              <Link href="/dashboard/devices" className="text-sm font-medium hover:underline">
+                Geräte
+              </Link>
               <button
                 onClick={() => signOut()}
                 className="text-sm font-medium text-red-600 hover:underline"

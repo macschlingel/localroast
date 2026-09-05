@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Settings } from "lucide-react";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -30,16 +30,23 @@ export default async function DashboardPage() {
         <h1 className="text-3xl font-bold">My Recipes</h1>
         <Link
           href="/dashboard/new"
-          className="inline-flex items-center gap-2 rounded-md bg-brown-600 bg-orange-700 px-4 py-2 text-sm font-medium text-white hover:bg-orange-800"
+          className="button-primary inline-flex items-center gap-2"
         >
           <Plus className="h-4 w-4" />
           New Recipe
         </Link>
       </div>
 
+      <div className="mb-8 flex justify-end">
+        <Link href="/dashboard/devices" className="button-secondary inline-flex items-center gap-2">
+          <Settings className="h-4 w-4" />
+          Geräte verwalten
+        </Link>
+      </div>
+
       {recipes.length === 0 ? (
         <div className="text-center py-12 border-2 border-dashed rounded-lg">
-          <p className="text-gray-500 mb-4">You haven't created any recipes yet.</p>
+          <p className="text-gray-500 mb-4">You haven&apos;t created any recipes yet.</p>
           <Link
             href="/dashboard/new"
             className="text-orange-700 font-medium hover:underline"
@@ -58,6 +65,7 @@ export default async function DashboardPage() {
               <h2 className="text-xl font-bold mb-2">{recipe.title}</h2>
               <div className="text-sm text-gray-600 mb-4">
                 <p>{recipe.grinder} • {recipe.grind_size}</p>
+                <p>{recipe.coffee_filter || "Filter nicht angegeben"}</p>
                 <p>{recipe.steps.length} steps</p>
               </div>
               <div className="flex items-center justify-between mt-auto">

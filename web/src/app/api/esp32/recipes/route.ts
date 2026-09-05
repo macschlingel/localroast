@@ -1,38 +1,26 @@
+import { authenticateDevice } from "@/lib/device-auth";
+import { errorResponse } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { consumeRateLimit, requestOrigin } from "@/lib/rate-limit";
 import { NextResponse } from "next/server";
 
 export async function GET(req: Request) {
-  const apiKey = req.headers.get("x-api-key");
-
-  if (!apiKey) {
-    return new NextResponse("Unauthorized", { status: 401 });
+  if (!consumeRateLimit(`esp32:${requestOrigin(req)}`)) {
+    return errorResponse("Too many requests", 429);
   }
 
-  const user = await prisma.user.findUnique({
-    where: {
-      apiKey: apiKey,
-    },
-  });
+  const device = await authenticateDevice(req);
 
-  if (!user) {
-    return new NextResponse("Invalid API Key", { status: 401 });
-  }
+  if (!device) return errorResponse("Invalid API key", 401);
 
   const recipes = await prisma.recipe.findMany({
-    where: {
-      userId: user.id,
-    },
-    include: {
-      steps: {
-        orderBy: {
-          step_order: "asc",
-        },
-      },
-    },
-    orderBy: {
-      updatedAt: "desc",
-    },
+    where: { userId: device.userId },
+    include: { steps: { orderBy: { step_order: "asc" } } },
+    orderBy: { updatedAt: "desc" },
+    take: 50,
   });
 
-  return NextResponse.json(recipes);
+  return NextResponse.json(recipes, {
+    headers: { "Cache-Control": "private, max-age=30" },
+  });
 }

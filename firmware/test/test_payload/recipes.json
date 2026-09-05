@@ -1,0 +1,20 @@
+[
+  {
+    "id": "recipe-1",
+    "title": "V60 Ethiopia",
+    "grinder": "Comandante C40",
+    "grind_size": "24 Klicks",
+    "coffee_filter": "Hario V60 02",
+    "filter_paper": "Cafec Abaca 2–4 Cups",
+    "is_public": false,
+    "steps": [
+      {
+        "step_order": 1,
+        "name": "Bloom",
+        "volume_ml": 60,
+        "time_seconds": 45,
+        "flow_rate_ml_per_sec": 2
+      }
+    ]
+  }
+]
