@@ -1,0 +1,5 @@
+.DS_Store
+
+# PlatformIO build and editor artifacts
+firmware/.pio/
+firmware/.vscode/
